@@ -1,5 +1,108 @@
 {
   "formatVersion": 1,
   "provider": "qits-certificates",
-  "states": []
+  "states": [
+    {
+      "name": "one ACTIVE anchor",
+      "slug": "one-active-anchor",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "getAnchors",
+          "method": "GET",
+          "path": "/certificates/api/anchors",
+          "status": 200,
+          "responseHeaders": {
+            "ETag": "\"31a1c4eb354d476295a941e578b9accf60b61c5d1c4d73325cbf70f40b7513d4\""
+          },
+          "file": "one-active-anchor/getAnchors.json",
+          "frozen": {
+            "ids": [
+              "$.anchors[*].id"
+            ],
+            "instants": [
+              "$.anchors[*].notBefore",
+              "$.anchors[*].notAfter",
+              "$.anchors[*].activatesAt"
+            ],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        },
+        {
+          "operationId": "rotateAnchors",
+          "method": "POST",
+          "path": "/certificates/api/anchors/rotate",
+          "status": 201,
+          "file": "one-active-anchor/rotateAnchors.json",
+          "frozen": {
+            "ids": [
+              "$.id"
+            ],
+            "instants": [
+              "$.notBefore",
+              "$.notAfter",
+              "$.activatesAt"
+            ],
+            "strings": [
+              "$.serial",
+              "$.sha256"
+            ],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "one ACTIVE and one PENDING anchor",
+      "slug": "one-active-and-one-pending-anchor",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001",
+        "pendingAnchorId": "00000000-0000-4000-8000-000000000002"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "getAnchors",
+          "method": "GET",
+          "path": "/certificates/api/anchors",
+          "status": 200,
+          "responseHeaders": {
+            "ETag": "\"0386208fb66584977db21cc66619079064b71348d8fb3eaa57edfc7931670bdc\""
+          },
+          "file": "one-active-and-one-pending-anchor/getAnchors.json",
+          "frozen": {
+            "ids": [
+              "$.anchors[*].id"
+            ],
+            "instants": [
+              "$.anchors[*].notBefore",
+              "$.anchors[*].notAfter",
+              "$.anchors[*].activatesAt"
+            ],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        },
+        {
+          "operationId": "rotateAnchors",
+          "method": "POST",
+          "path": "/certificates/api/anchors/rotate",
+          "status": 409,
+          "file": "one-active-and-one-pending-anchor/rotateAnchors.json",
+          "frozen": {
+            "ids": [
+              "$.anchorId"
+            ],
+            "instants": [],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    }
+  ]
 }

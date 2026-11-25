@@ -15,8 +15,9 @@ artifacts:
 userflows: qits-certificates
 
 # The provider golden masters: the platform packages `golden-masters/` as
-# `eu.wohlben.qits:qits-certificates-golden-masters`. No state yet: the doors, and the recording
-# test that records them, come with the CA itself (qits-2524 C2/C3).
+# `eu.wohlben.qits:qits-certificates-golden-masters`. contracts/GoldenMasterRecordingTest records
+# them: `one ACTIVE anchor` and `one ACTIVE and one PENDING anchor` (qits-2524 C2); the leaves
+# door's states come with C3.
 #
 # No `entities:` and no `database:`: there is no database. No pacts yet: this service calls no
 # provider of its own (the idp's discovery and JWKS reads come with the first protected door).

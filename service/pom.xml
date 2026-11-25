@@ -18,7 +18,7 @@
     <properties>
         <!-- THIS MODULE OPTS BACK INTO ITS INTEGRATION TESTS (the root pom's default is true), the
              qits-stt shape: the one story boots the packaged artifact against idp.MockIdp — no
-             docker, no database — and it is what proves the crypto path in the PACKAGED form, the
+             docker, no database — and it is what proves the anchors in the PACKAGED form, the
              native binary under `-Dnative`. -->
         <skipITs>false</skipITs>
     </properties>
@@ -42,9 +42,14 @@
         </dependency>
         <dependency>
             <!-- /certificates/q/health/ready, which the deploy gates on; carries the
-                 `certificates-crypto` readiness check (health/CryptoReadiness). -->
+                 `certificates-anchors` readiness check (health/AnchorsReadiness). -->
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
+        </dependency>
+        <dependency>
+            <!-- The daily rotation job (control/AnchorRotation, @Scheduled every 24h). -->
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -88,6 +93,13 @@
             <!-- HttpClientRules and DeskAdminParityRules from day one. -->
             <groupId>${project.groupId}</groupId>
             <artifactId>qits-arch-rules</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- ConsumerPactVerificationTest: verifies the consumer pacts this provider pins (none
+                 yet: qits-2632's trust-anchors client is the first). -->
+            <groupId>au.com.dius.pact.provider</groupId>
+            <artifactId>junit5</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -149,9 +161,9 @@
 
     <profiles>
         <!-- GraalVM native build: `-Dnative`. `./mvnw verify -Dnative` runs CertificatesBootstrapIT
-             against the BINARY: its `certificates-crypto` readiness check signs a CSR end to end
-             with Bouncy Castle's bcpkix, which is exactly what a lost native registration breaks
-             with a green JVM suite. docker/Dockerfile runs `package -DskipTests` and never reaches
+             against the BINARY: on an empty volume it makes its first anchor with Bouncy Castle's
+             bcpkix and serves it, which is exactly what a lost native registration breaks with a
+             green JVM suite. docker/Dockerfile runs `package -DskipTests` and never reaches
              it; there the deploy's health gate on /certificates/q/health/ready is the same check. -->
         <profile>
             <id>native</id>

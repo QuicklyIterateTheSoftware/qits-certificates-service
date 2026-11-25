@@ -1,0 +1,9 @@
+{
+  "id" : "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "status" : "ACTIVE",
+  "createdAt" : "2026-11-01T00:00:00Z",
+  "activatesAt" : "2026-11-01T00:00:00Z",
+  "retiresAt" : null,
+  "notAfter" : "2031-11-01T00:00:00Z",
+  "sha256" : "ac7b69470e98c537b085a2dca9952627618e3a82fa782cbef5b5662d75e1324d"
+}
