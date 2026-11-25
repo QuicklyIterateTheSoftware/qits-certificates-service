@@ -10,10 +10,14 @@ application: qits-certificates
 host: certificates
 routes: /certificates
 
-# PRIVATE: the platform's certificate authority stays off the internet. qits-edge-private serves
-# certificates.qits.<domain>; platform callers reach it there, through the edge, as every platform
-# host is reached.
-exposure: private
+# PUBLIC (the default), not private: a service sits on exactly one network (qits-2174), and the CA's
+# leaf door has to be reachable from qits-egress, which lives on qits-net because its own callers
+# (qits-edge) dial its wire alias there. A private service on qits-private is reachable only through
+# the private edge, which qits-net cannot reach (qits-egress timed out dialling it, 2026-11-25), while
+# a public host is reachable from both networks through the public edge. Every door still checks
+# its caller: the leaf door takes qits:system plus the egress requester, rotate takes qits:admin,
+# and the anchors door serves only public certificates.
+exposure: public
 
 # NO DATABASE. One service client: idp:client is this application's own qits-idp client,
 # `<env>-qits-certificates`, the bearer the telemetry exporters present.

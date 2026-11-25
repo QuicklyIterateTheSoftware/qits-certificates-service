@@ -2,7 +2,7 @@
 
 The platform's own **certificate authority** (epic qits-2524). Application `qits-certificates`, image
 `qits/qits-certificates`, Java package `eu.wohlben.qits.certificates`, archetype SERVICE. Quarkus
-native, served at `https://certificates.qits.<domain>/certificates`, behind the private edge only.
+native, served at `https://certificates.qits.<domain>/certificates` through the public edge (`exposure: public`, so qits-egress on qits-net can reach the leaf door; every door still checks its caller).
 
 It keeps the platform's trust anchors and signs short-lived leaf certificates for the platform
 callers allowed to ask for one (qits-egress first). Other containers trust the anchors it publishes.
