@@ -1,0 +1,27 @@
+{
+  "version": "0386208fb66584977db21cc66619079064b71348d8fb3eaa57edfc7931670bdc",
+  "anchors": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "status": "ACTIVE",
+      "subject": "CN=qits platform CA dev 2026-11, O=qits",
+      "serial": "b76785e4ef03d2df4aa803c03d4053f6",
+      "notBefore": "2026-01-01T00:00:00Z",
+      "notAfter": "2026-01-01T00:00:00Z",
+      "sha256": "ac7b69470e98c537b085a2dca9952627618e3a82fa782cbef5b5662d75e1324d",
+      "activatesAt": "2026-01-01T00:00:00Z",
+      "retiresAt": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "status": "PENDING",
+      "subject": "CN=qits platform CA dev 2026-11, O=qits",
+      "serial": "a2d9cbb72841eb5519a9361aed047487",
+      "notBefore": "2026-01-01T00:00:00Z",
+      "notAfter": "2026-01-01T00:00:00Z",
+      "sha256": "a4e57290c31aa67dcfe6053775d8757817b5a619d06c3ff3bcdfe4ad5c141b59",
+      "activatesAt": "2026-01-01T00:00:00Z",
+      "retiresAt": null
+    }
+  ]
+}

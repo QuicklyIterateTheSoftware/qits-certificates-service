@@ -39,6 +39,12 @@
             <artifactId>bcprov-jdk18on</artifactId>
         </dependency>
         <dependency>
+            <!-- state.json, read and written through the tree model (no reflection, so nothing to
+                 register for the native image). The version is the Quarkus BOM's. -->
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
             <!-- Pure unit tests. -->
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit</artifactId>

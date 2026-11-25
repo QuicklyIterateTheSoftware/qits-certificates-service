@@ -3,12 +3,114 @@
 ---
 openapi: 3.1.0
 components:
+  schemas:
+    AnchorDto:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        subject:
+          type: string
+        serial:
+          type: string
+        notBefore:
+          $ref: "#/components/schemas/Instant"
+        notAfter:
+          $ref: "#/components/schemas/Instant"
+        sha256:
+          type: string
+        activatesAt:
+          $ref: "#/components/schemas/Instant"
+        retiresAt:
+          $ref: "#/components/schemas/Instant"
+    AnchorsDto:
+      type: object
+      properties:
+        version:
+          type: string
+        anchors:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnchorDto"
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: string
+        anchorId:
+          type: string
+    Instant:
+      type: string
+      format: date-time
+      examples:
+      - 2022-03-10T16:15:50Z
   securitySchemes:
     SecurityScheme:
       type: openIdConnect
       openIdConnectUrl: https://idp.qits.wohlben.eu/idp/.well-known/openid-configuration
       description: Authentication
+paths:
+  /certificates/api/anchors:
+    get:
+      summary: "The trust anchors: the PEM bundle, or JSON with Accept: application/json"
+      operationId: getAnchors
+      responses:
+        "200":
+          description: "Every PENDING, ACTIVE and RETIRING anchor, ACTIVE first. The\
+            \ PEM bundle by default; ETag is the SHA-256 of the PEM bundle in either\
+            \ form"
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/x-pem-file:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorsDto"
+        "304":
+          description: If-None-Match names the current version
+        "503":
+          description: No anchor is loaded (the volume is unreadable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+      tags:
+      - Anchors Resource
+  /certificates/api/anchors/rotate:
+    post:
+      summary: "Start a rotation: a new PENDING anchor, ACTIVE after the overlap"
+      operationId: rotateAnchors
+      responses:
+        "201":
+          description: The new PENDING anchor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorDto"
+        "409":
+          description: An anchor is already PENDING; anchorId names it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "401":
+          description: Not Authorized
+        "403":
+          description: Not Allowed
+      tags:
+      - Anchors Resource
+      security:
+      - SecurityScheme:
+        - qits:admin
 info:
   title: qits-certificates API
   version: "0"
-paths: {}

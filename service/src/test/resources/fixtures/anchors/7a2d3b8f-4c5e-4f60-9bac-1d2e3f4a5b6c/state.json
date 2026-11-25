@@ -1,0 +1,9 @@
+{
+  "id" : "7a2d3b8f-4c5e-4f60-9bac-1d2e3f4a5b6c",
+  "status" : "PENDING",
+  "createdAt" : "2026-11-20T00:00:00Z",
+  "activatesAt" : "2026-12-20T00:00:00Z",
+  "retiresAt" : null,
+  "notAfter" : "2031-11-20T00:00:00Z",
+  "sha256" : "a4e57290c31aa67dcfe6053775d8757817b5a619d06c3ff3bcdfe4ad5c141b59"
+}
