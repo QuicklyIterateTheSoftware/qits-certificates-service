@@ -60,7 +60,8 @@ public final class CertificateSmoke {
   /** The name the smoke's leaf asks for: never a platform host, and never issued for real. */
   public static final String LEAF_NAME = "smoke.certificates.invalid";
 
-  private static final SecureRandom RANDOM = new SecureRandom();
+  // No static SecureRandom: a native image refuses one in its image heap (seeded at build time).
+  // Each call makes its own.
 
   /** What the smoke proved, without any key material. */
   public record Result(String anchorSubject, String leafSubject, List<String> leafNames) {}
@@ -160,7 +161,7 @@ public final class CertificateSmoke {
 
   private static KeyPair generate(String curve) throws GeneralSecurityException {
     KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-    generator.initialize(new ECGenParameterSpec(curve), RANDOM);
+    generator.initialize(new ECGenParameterSpec(curve), new SecureRandom());
     return generator.generateKeyPair();
   }
 
@@ -170,7 +171,7 @@ public final class CertificateSmoke {
 
   /** 128 random bits, positive. */
   private static BigInteger serial() {
-    return new BigInteger(128, RANDOM).setBit(127);
+    return new BigInteger(128, new SecureRandom()).setBit(127);
   }
 
   private static String pem(Object structure) throws IOException {
