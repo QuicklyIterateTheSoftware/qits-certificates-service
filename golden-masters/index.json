@@ -3,6 +3,88 @@
   "provider": "qits-certificates",
   "states": [
     {
+      "name": "leaf issued",
+      "slug": "leaf-issued",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueLeaf",
+          "method": "POST",
+          "path": "/certificates/api/leaves",
+          "body": {
+            "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIBFjCBvAIBADAcMRowGAYDVQQDDBFpZ25vcmVkIGJ5IHRoZSBDQTBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABLC3UU1slpd0ZdoRxiIUKlyVIf5MjydBKkWD163w\nj7LqjBZ6vbGakDIXgzY6CA5muraldyFCHEgeyo/jdVAgkeCgPjA8BgkqhkiG9w0B\nCQ4xLzAtMCsGA1UdEQQkMCKCD2FwaS5leGFtcGxlLm9yZ4IPd3d3LmV4YW1wbGUu\nb3JnMAoGCCqGSM49BAMCA0kAMEYCIQCdLS+Yw1X5Ls1yvtxQgYVZT+Lh30JaQdu5\n8nzuE2yHHwIhAOniWC+t15/NB1Yv64detyoG8H0YT9/uAMns8jhOakkm\n-----END CERTIFICATE REQUEST-----\n"
+          },
+          "status": 201,
+          "file": "leaf-issued/issueLeaf.json",
+          "frozen": {
+            "ids": [
+              "$.anchorId"
+            ],
+            "instants": [
+              "$.notAfter"
+            ],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "leaf name refused",
+      "slug": "leaf-name-refused",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueLeaf",
+          "method": "POST",
+          "path": "/certificates/api/leaves",
+          "body": {
+            "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIBATCBpwIBADAcMRowGAYDVQQDDBFpZ25vcmVkIGJ5IHRoZSBDQTBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABLC3UU1slpd0ZdoRxiIUKlyVIf5MjydBKkWD163w\nj7LqjBZ6vbGakDIXgzY6CA5muraldyFCHEgeyo/jdVAgkeCgKTAnBgkqhkiG9w0B\nCQ4xGjAYMBYGA1UdEQQPMA2CC2RiLmludGVybmFsMAoGCCqGSM49BAMCA0kAMEYC\nIQCttiueqDqNELxvwuIzUtoa9UdExcQERYtcILt/YhdtRwIhAP7BobJ15vS1OKSe\nU1vkwfJgFf2euMs+vc8exCDp+fFC\n-----END CERTIFICATE REQUEST-----\n"
+          },
+          "status": 400,
+          "file": "leaf-name-refused/issueLeaf.json",
+          "frozen": {
+            "ids": [],
+            "instants": [],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "not a leaf requester",
+      "slug": "not-a-leaf-requester",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueLeaf",
+          "method": "POST",
+          "path": "/certificates/api/leaves",
+          "body": {
+            "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIBFjCBvAIBADAcMRowGAYDVQQDDBFpZ25vcmVkIGJ5IHRoZSBDQTBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABLC3UU1slpd0ZdoRxiIUKlyVIf5MjydBKkWD163w\nj7LqjBZ6vbGakDIXgzY6CA5muraldyFCHEgeyo/jdVAgkeCgPjA8BgkqhkiG9w0B\nCQ4xLzAtMCsGA1UdEQQkMCKCD2FwaS5leGFtcGxlLm9yZ4IPd3d3LmV4YW1wbGUu\nb3JnMAoGCCqGSM49BAMCA0kAMEYCIQCdLS+Yw1X5Ls1yvtxQgYVZT+Lh30JaQdu5\n8nzuE2yHHwIhAOniWC+t15/NB1Yv64detyoG8H0YT9/uAMns8jhOakkm\n-----END CERTIFICATE REQUEST-----\n"
+          },
+          "status": 403,
+          "file": "not-a-leaf-requester/issueLeaf.json",
+          "frozen": {
+            "ids": [],
+            "instants": [],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
       "name": "one ACTIVE anchor",
       "slug": "one-active-anchor",
       "params": {

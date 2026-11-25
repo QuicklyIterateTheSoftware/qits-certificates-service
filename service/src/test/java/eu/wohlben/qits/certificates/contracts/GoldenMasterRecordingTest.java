@@ -7,8 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import eu.wohlben.qits.certificates.api.Roles;
 import eu.wohlben.qits.certificates.support.ContractCallers;
+import eu.wohlben.qits.certificates.support.Csrs;
 import eu.wohlben.qits.certificates.support.TestClock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
@@ -43,7 +43,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p><b>Deterministic by construction.</b> The states stage the fixed fixture anchors with the
  * clock pinned, so the bundle, its version and every certificate field are the same bytes on every
- * run. The one answer that cannot be is a new anchor's (the rotation's 201): its key, and so its
+ * run. The leaf states also pin the leaf's randomness and send a fixed fixture CSR, so an issued
+ * leaf, its serial and its signature are the same bytes too. The one answer that cannot be is a
+ * new anchor's (the rotation's 201): its key, and so its
  * {@code serial} and {@code sha256}, are random. Those two values are frozen as unique tokens
  * ({@code frozen.strings}), which a consumer matches by type.
  *
@@ -63,17 +65,20 @@ class GoldenMasterRecordingTest {
   static final String API = "/certificates/api";
 
   /**
-   * One recorded interaction; {@code operator} whether it calls as the operator holding {@code
-   * qits:admin} rather than anonymously, {@code responseHeaders} the answer's headers recorded,
-   * and {@code randomFields} the top-level answer fields that hold freshly random values.
+   * One recorded interaction; {@code requestBody} the JSON it sends (recorded in the index as the
+   * operation's {@code body}), or null; {@code authorized} whether it calls as the state's caller
+   * ({@link ProviderStates.Setup#caller()}, sent and not recorded) rather than anonymously; {@code
+   * responseHeaders} the answer's headers recorded, and {@code randomFields} the top-level answer
+   * fields that hold freshly random values.
    */
   record Interaction(
       String state,
       String operationId,
       String method,
       String path,
+      String requestBody,
       int status,
-      boolean operator,
+      boolean authorized,
       List<String> responseHeaders,
       List<String> randomFields) {}
 
@@ -84,6 +89,7 @@ class GoldenMasterRecordingTest {
               "getAnchors",
               "GET",
               API + "/anchors",
+              null,
               200,
               false,
               List.of("ETag"),
@@ -93,6 +99,7 @@ class GoldenMasterRecordingTest {
               "rotateAnchors",
               "POST",
               API + "/anchors/rotate",
+              null,
               201,
               true,
               List.of(),
@@ -102,6 +109,7 @@ class GoldenMasterRecordingTest {
               "getAnchors",
               "GET",
               API + "/anchors",
+              null,
               200,
               false,
               List.of("ETag"),
@@ -111,7 +119,38 @@ class GoldenMasterRecordingTest {
               "rotateAnchors",
               "POST",
               API + "/anchors/rotate",
+              null,
               409,
+              true,
+              List.of(),
+              List.of()),
+          new Interaction(
+              ProviderStates.LEAF_ISSUED,
+              "issueLeaf",
+              "POST",
+              API + "/leaves",
+              Csrs.body(Csrs.fixture(Csrs.TWO_NAMES)),
+              201,
+              true,
+              List.of(),
+              List.of()),
+          new Interaction(
+              ProviderStates.LEAF_NAME_REFUSED,
+              "issueLeaf",
+              "POST",
+              API + "/leaves",
+              Csrs.body(Csrs.fixture(Csrs.INTERNAL_NAME)),
+              400,
+              true,
+              List.of(),
+              List.of()),
+          new Interaction(
+              ProviderStates.NOT_A_LEAF_REQUESTER,
+              "issueLeaf",
+              "POST",
+              API + "/leaves",
+              Csrs.body(Csrs.fixture(Csrs.TWO_NAMES)),
+              403,
               true,
               List.of(),
               List.of()));
@@ -127,6 +166,7 @@ class GoldenMasterRecordingTest {
   @AfterEach
   void unpin() {
     clock.reset();
+    states.reset();
   }
 
   @Test
@@ -161,6 +201,9 @@ class GoldenMasterRecordingTest {
       operation.put("operationId", interaction.operationId());
       operation.put("method", interaction.method());
       operation.put("path", interaction.path());
+      if (interaction.requestBody() != null) {
+        operation.set("body", JSON.readTree(interaction.requestBody()));
+      }
       operation.put("status", interaction.status());
       if (!recorded.headers().isEmpty()) {
         ObjectNode headers = operation.putObject("responseHeaders");
@@ -221,10 +264,15 @@ class GoldenMasterRecordingTest {
       throws IOException {
     Map<String, String> params = setup.params();
     var request = given().header("Accept", "application/json");
-    if (interaction.operator()) {
+    if (interaction.authorized()) {
+      ProviderStates.Caller caller = setup.caller();
       request =
           request.header(
-              "Authorization", ContractCallers.caller(ProviderStates.OPERATOR, Roles.ADMIN));
+              "Authorization",
+              ContractCallers.caller(caller.subject(), caller.roles().toArray(String[]::new)));
+    }
+    if (interaction.requestBody() != null) {
+      request = request.contentType("application/json").body(interaction.requestBody());
     }
     Response response =
         request.when().request(interaction.method(), expand(interaction.path(), params));

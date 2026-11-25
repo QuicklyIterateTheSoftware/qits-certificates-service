@@ -17,11 +17,13 @@ them; never move them by hand.
 
 - `domain/`: the certificate authority (`control`). It has no web stack, no datasource and no
   Flyway. `Anchors` is the state machine and the published bundle, `AnchorStore` the volume
-  (`<ca-dir>/anchors/<id>/`), `AnchorCrypto` the keys and certificates. Its tests are plain JUnit
-  on a temp directory with a clock they move (`AnchorsTest`).
-- `service/`: the deployable. `api` (the doors, `Roles`, `AnchorsWire`, `ApiWireReflection`),
-  `health/AnchorsReadiness`, and `rotation` (the startup run and the daily `@Scheduled` job, and the
-  `Clock` producer). Every Quarkus test lives here.
+  (`<ca-dir>/anchors/<id>/`), `AnchorCrypto` the keys and certificates. `Leaves` signs leaves and
+  writes the audit line, `LeafPolicy` holds every rule of who may ask and for which names, and
+  `LeafCrypto` builds the leaf. Its tests are plain JUnit on a temp directory with a clock they
+  move (`AnchorsTest`, `LeavesTest`, `LeafPolicyTest`).
+- `service/`: the deployable. `api` (the doors, `Roles`, `AnchorsWire`, `LeavesWire`,
+  `ApiWireReflection`), `health/AnchorsReadiness`, and `rotation` (the startup run and the daily
+  `@Scheduled` job, and the `Clock` and `Entropy` producers). Every Quarkus test lives here.
 
 ## Conventions
 
@@ -38,9 +40,14 @@ them; never move them by hand.
 - **Roles** are spelled out in each `@RolesAllowed`. Wherever `qits:admin-agent` is admitted,
   `qits:desk-admin` is admitted too (`DeskAdminParityTest`).
 - **Every served type** is listed in `api/ApiWireReflection`; `ApiWireReflectionTest` fails on a
-  nested type of `AnchorsWire` left out.
+  nested type of `AnchorsWire` or `LeavesWire` left out.
+- **Every leaf decision is audited**, one INFO line on `eu.wohlben.qits.certificates.audit`
+  (README, "Leaves"). A new refusal path writes its line through `Leaves`; a door-level refusal
+  (the 403 for a caller without `qits:system`) is mapped on `LeavesResource` for that reason.
 - **No `SecureRandom` in a static field**, nor in anything built at image-build time (a
-  `KeyPairGenerator` holds one): the native image refuses it in its heap. Make one per call.
+  `KeyPairGenerator` holds one): the native image refuses it in its heap. Make one per call. A leaf
+  takes its one from the `Entropy` bean (`SecureRandom::new` in the service), which the suite's
+  `support/TestEntropy` pins so a recorded leaf is the same bytes every run.
 - **Time is the injected `java.time.Clock`.** The service produces the system clock as a
   `@DefaultBean`; the suite's `support/TestClock` replaces it, and `support/Ca` stages the volume
   (empty, a fresh boot, or the fixture anchors with the clock pinned). The daily job is off in
@@ -55,8 +62,11 @@ them; never move them by hand.
 | `service/src/test/resources/fixtures/anchors/**` | Made ONCE by the service's own `AnchorCrypto` and committed: the golden masters' bytes depend on them. Never regenerate them casually. |
 
 A new door needs a golden master in the same commit. The recordings call with `Accept:
-application/json`; a random value a door makes (a new anchor's `serial` and `sha256`) is frozen as a
-unique token, and everything else comes from the fixture anchors, so a re-record is byte-identical. The release gate fails any operation in
+application/json`, as the state's caller (`ProviderStates.Setup#caller`, which pact verification
+uses too); a random value a door makes (a new anchor's `serial` and `sha256`) is frozen as a
+unique token, a leaf's randomness is pinned instead (`TestEntropy`), and everything else comes from
+the fixture anchors and the fixture CSRs (`fixtures/csr/`, made once with openssl, never
+regenerated casually), so a re-record is byte-identical. The release gate fails any operation in
 `docs/openapi.yml` that `golden-masters/index.json` does not cover.
 
 ## The userflow catalogue, and the native proof
@@ -69,7 +79,8 @@ runs them.
 `CertificatesBootstrapIT` is also **the native IT**: the packaged process boots on an empty CA
 volume (a temp directory), makes its first anchor with bcpkix inside the binary under
 `./mvnw verify -Dnative`, reports `certificates-anchors` UP, and serves the bundle the story parses.
-Signing a CSR end to end returns to it with the leaves door (qits-2524 C3).
+`stories/leaves/LeafIssuanceIT`, on the same profile, has that process sign a CSR with the
+anchor's stored key end to end and refuse a non-requester and an agent.
 
 The release recipe does not run it natively, because the image build is `package -DskipTests`. In
 production the same check is the deploy's health gate, so a native image that has lost part of Bouncy

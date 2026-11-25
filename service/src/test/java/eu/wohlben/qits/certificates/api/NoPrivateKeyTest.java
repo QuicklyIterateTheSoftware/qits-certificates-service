@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import eu.wohlben.qits.certificates.control.Anchors;
 import eu.wohlben.qits.certificates.support.Ca;
 import eu.wohlben.qits.certificates.support.ContractCallers;
+import eu.wohlben.qits.certificates.support.Csrs;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
@@ -30,7 +31,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * <b>No door, log line, health check or error body carries a {@code PRIVATE KEY}.</b> Every door
- * is called on every path it has, error paths included (304, 401, 403, 409, 500, 503, 404), plus
+ * is called on every path it has, error paths included (304, 400, 401, 403, 405, 409, 500, 503,
+ * 404), the leaf door's issuance and every refusal among them, plus
  * health and the API document; every body and every header is scanned, and so is every log record
  * the service writes meanwhile — including those about an anchor directory whose files hold a
  * private key where a certificate belongs.
@@ -41,6 +43,8 @@ class NoPrivateKeyTest {
   static final String MARK = "PRIVATE KEY";
 
   static final String ANCHORS = "/certificates/api/anchors";
+
+  static final String LEAVES = "/certificates/api/leaves";
 
   @Inject Ca ca;
 
@@ -137,6 +141,31 @@ class NoPrivateKeyTest {
     scan("POST rotate again", () -> given().header("Authorization", admin).post(ANCHORS + "/rotate"), 409);
     scan("GET anchors JSON with PENDING", () -> given().header("Accept", "application/json").get(ANCHORS), 200);
     scan("GET rotate", () -> given().get(ANCHORS + "/rotate"), 405);
+
+    // The leaf door: issued, and every refusal. It signs with the key the volume holds.
+    String requester = ContractCallers.caller("dev-qits-egress", Roles.SYSTEM);
+    String csr = Csrs.body(Csrs.fixture(Csrs.TWO_NAMES));
+    String p384 = Csrs.body(Csrs.forNames(Csrs.keys("EC", "secp384r1"), "a.example.org"));
+    scan("POST leaves anonymous", () -> leaf(null, csr), 401);
+    scan("POST leaves as agent", () -> leaf(ContractCallers.caller("a", "qits:agent"), csr), 403);
+    scan(
+        "POST leaves as a non-requester",
+        () -> leaf(ContractCallers.caller("dev-qits-ci", Roles.SYSTEM), csr),
+        403);
+    scan("POST leaves", () -> leaf(requester, csr), 201);
+    scan(
+        "POST leaves name refused",
+        () -> leaf(requester, Csrs.body(Csrs.fixture(Csrs.INTERNAL_NAME))),
+        400);
+    scan(
+        "POST leaves with a P-384 key",
+        () -> leaf(requester, p384),
+        400);
+    // A private key where the CSR belongs: refused, and never echoed.
+    String keyAsCsr = Csrs.body(Files.readString(key));
+    scan("POST leaves with a key for a CSR", () -> leaf(requester, keyAsCsr), 400);
+    scan("POST leaves with no csr", () -> leaf(requester, "{}"), 400);
+    scan("GET leaves", () -> given().get(LEAVES), 405);
     scan("GET unknown", () -> given().get("/certificates/api/nothing"), 404);
     scan("GET ready", () -> given().get("/certificates/q/health/ready"), 200);
     scan("GET live", () -> given().get("/certificates/q/health/live"), 200);
@@ -156,8 +185,14 @@ class NoPrivateKeyTest {
       Files.move(aside, dir);
     }
 
+    // The ACTIVE anchor's key is gone from the volume: the leaf door's 500, and its log line.
+    ca.stage(Ca.ACTIVE);
+    Files.delete(ca.directory().resolve(Ca.ACTIVE).resolve("key.pem"));
+    scan("POST leaves with an unreadable key", () -> leaf(requester, csr), 500);
+
     // No anchor at all: 503, and readiness DOWN.
     ca.empty();
+    scan("POST leaves with none", () -> leaf(requester, csr), 503);
     scan("GET anchors with none", () -> given().get(ANCHORS), 503);
     scan("GET anchors JSON with none", () -> given().header("Accept", "application/json").get(ANCHORS), 503);
     scan("GET ready with none", () -> given().get("/certificates/q/health/ready"), 503);
@@ -172,6 +207,17 @@ class NoPrivateKeyTest {
     for (String line : lines) {
       assertFalse(line.contains(MARK), "a log line carries a private key: " + line);
     }
-    assertEquals(20, calls.size(), "every door and every path: " + calls);
+    assertTrue(
+        lines.stream().anyMatch(l -> l.contains("certificates decision=ISSUED")),
+        "the issuance was audited: " + lines);
+    assertEquals(31, calls.size(), "every door and every path: " + calls);
+  }
+
+  private static Response leaf(String authorization, String body) {
+    var request = given().contentType("application/json").body(body);
+    if (authorization != null) {
+      request = request.header("Authorization", authorization);
+    }
+    return request.post(LEAVES);
   }
 }
