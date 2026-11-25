@@ -35,7 +35,8 @@ import org.junit.jupiter.api.BeforeAll;
  * binary under {@code ./mvnw verify -Dnative} — with the OIDC tenant <b>on</b> against
  * {@link MockIdp}, the shipped validation block no {@code @QuarkusTest} here exercises.
  *
- * <p>THIS IS THE NATIVE IT (qits-2646, qits-2647). The launched process boots on an empty CA
+ * <p>THIS IS THE NATIVE IT (qits-2646, qits-2647; the leaf door's signing is {@code
+ * leaves/LeafIssuanceIT}, on the same profile). The launched process boots on an empty CA
  * volume, so it makes its first ACTIVE anchor itself: an EC P-384 key from the JDK, a self-signed
  * certificate built, written as PEM and parsed back by Bouncy Castle's bcpkix. Against the binary
  * that proves the native image carries everything the anchors need — the known risk of this
@@ -55,6 +56,9 @@ public class CertificatesBootstrapIT {
 
   static final String SERVICE = "qits-certificates";
 
+  /** The one {@code sub} the packaged process admits to the leaf door. */
+  public static final String LEAF_REQUESTER = "dev-qits-egress";
+
   /**
    * The packaged process's environment: the gate on, the idp moved to the mock, telemetry dark,
    * and the CA volume a fresh temp directory (the image's /work/ca does not exist here). Every key
@@ -69,6 +73,9 @@ public class CertificatesBootstrapIT {
       overrides.put("qits.auth.machine.required", "true");
       overrides.put("quarkus.oidc.auth-server-url", idp.baseUrl());
       overrides.put("quarkus.otel.sdk.disabled", "true");
+      // The leaf requester the leaf story calls as, spelled out rather than left to the
+      // QITS_ENVIRONMENT of whichever machine runs the suite.
+      overrides.put("qits.certificates.leaf.requesters", LEAF_REQUESTER);
       try {
         overrides.put(
             "qits.certificates.ca-dir", Files.createTempDirectory("qits-certificates-ca").toString());

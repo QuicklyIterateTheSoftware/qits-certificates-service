@@ -12,7 +12,6 @@ import au.com.dius.pact.provider.junitsupport.IgnoreNoPactsToVerify;
 import au.com.dius.pact.provider.junitsupport.Provider;
 import au.com.dius.pact.provider.junitsupport.State;
 import au.com.dius.pact.provider.junitsupport.loader.PactSource;
-import eu.wohlben.qits.certificates.api.Roles;
 import eu.wohlben.qits.certificates.support.ContractCallers;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -36,8 +35,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * {@link ClasspathPactLoader#REQUIRED} is false; drop the one and flip the other when the first jar
  * is pinned.
  *
- * <p>An interaction that carries no {@code Authorization} runs as the operator holding {@code
- * qits:admin} (the anchors read needs none; the rotation needs it). Every {@code @State} method
+ * <p>An interaction that carries no {@code Authorization} runs as its state's caller ({@link
+ * ProviderStates.Setup#caller()}): the operator holding {@code qits:admin} in the anchors states
+ * (the anchors read needs none; the rotation needs it), the leaf requester or a {@code qits:system}
+ * service that is not one in the leaf states. Every {@code @State} method
  * delegates to {@link ProviderStates}; {@link #target} fails an unknown state, and an interaction
  * without {@code comments.references.qits-call} or {@code qits-trigger}.
  */
@@ -101,10 +102,16 @@ class ConsumerPactVerificationTest {
       return;
     }
     if (request != null && !request.containsHeader("Authorization")) {
+      ProviderStates.Caller caller = states.caller();
       request.setHeader(
-          "Authorization", ContractCallers.caller(ProviderStates.OPERATOR, Roles.ADMIN));
+          "Authorization",
+          ContractCallers.caller(caller.subject(), caller.roles().toArray(String[]::new)));
     }
-    context.verifyInteraction();
+    try {
+      context.verifyInteraction();
+    } finally {
+      states.reset();
+    }
   }
 
   // --- the states: each one line into the registry -------------------------------------------
@@ -117,5 +124,20 @@ class ConsumerPactVerificationTest {
   @State(ProviderStates.ONE_ACTIVE_AND_ONE_PENDING_ANCHOR)
   Map<String, String> oneActiveAndOnePendingAnchor() {
     return states.params(ProviderStates.ONE_ACTIVE_AND_ONE_PENDING_ANCHOR);
+  }
+
+  @State(ProviderStates.LEAF_ISSUED)
+  Map<String, String> leafIssued() {
+    return states.params(ProviderStates.LEAF_ISSUED);
+  }
+
+  @State(ProviderStates.LEAF_NAME_REFUSED)
+  Map<String, String> leafNameRefused() {
+    return states.params(ProviderStates.LEAF_NAME_REFUSED);
+  }
+
+  @State(ProviderStates.NOT_A_LEAF_REQUESTER)
+  Map<String, String> notALeafRequester() {
+    return states.params(ProviderStates.NOT_A_LEAF_REQUESTER);
   }
 }

@@ -1,6 +1,8 @@
 package eu.wohlben.qits.certificates.contracts;
 
+import eu.wohlben.qits.certificates.api.Roles;
 import eu.wohlben.qits.certificates.support.Ca;
+import eu.wohlben.qits.certificates.support.TestEntropy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.Collections;
@@ -20,6 +22,11 @@ import java.util.function.Supplier;
  *
  * <p>Every state starts from an empty volume, so applying it twice is the same state, and the
  * anchors it stages are the same bytes on every run.
+ *
+ * <p>The three leaf states stage the ACTIVE fixture anchor and pin the leaf randomness ({@link
+ * TestEntropy}) as well as the clock, so a leaf issued in them is the same bytes on every run. Each
+ * also names the caller ({@link Setup#caller()}) a call without its own {@code Authorization} is
+ * made as: the leaf requester, or a {@code qits:system} service that is not one.
  */
 @ApplicationScoped
 public class ProviderStates {
@@ -30,11 +37,35 @@ public class ProviderStates {
   /** A rotation under way: the ACTIVE anchor and the PENDING one that will replace it. */
   public static final String ONE_ACTIVE_AND_ONE_PENDING_ANCHOR = "one ACTIVE and one PENDING anchor";
 
+  /** A leaf requester asks for a leaf the rules allow. */
+  public static final String LEAF_ISSUED = "leaf issued";
+
+  /** A leaf requester asks for a leaf with a name the rules refuse. */
+  public static final String LEAF_NAME_REFUSED = "leaf name refused";
+
+  /** A {@code qits:system} service that is not a leaf requester asks for a leaf. */
+  public static final String NOT_A_LEAF_REQUESTER = "not a leaf requester";
+
   /** Who the operator recordings call as. */
   public static final String OPERATOR = "operator";
 
-  /** What a state hands back: its parameters, keys sorted, and no unique tokens. */
-  public record Setup(Map<String, String> params) {
+  /** The leaf requester the suite configures ({@code %test.qits.certificates.leaf.requesters}). */
+  public static final String REQUESTER = "dev-qits-egress";
+
+  /** A {@code qits:system} service that is not a leaf requester. */
+  public static final String NOT_A_REQUESTER = "dev-qits-ci";
+
+  /** Who calls: a {@code sub} and the roles it holds. */
+  public record Caller(String subject, List<String> roles) {}
+
+  /** The operator holding {@code qits:admin}, the caller of every anchors state. */
+  public static final Caller OPERATOR_CALLER = new Caller(OPERATOR, List.of(Roles.ADMIN));
+
+  /**
+   * What a state hands back: its parameters, keys sorted, no unique tokens, and the caller a call
+   * without its own {@code Authorization} is made as.
+   */
+  public record Setup(Map<String, String> params, Caller caller) {
     public List<String> uniqueTokens() {
       return List.of();
     }
@@ -44,9 +75,27 @@ public class ProviderStates {
 
   @Inject Ca ca;
 
+  @Inject TestEntropy entropy;
+
+  private volatile Caller caller = OPERATOR_CALLER;
+
   public ProviderStates() {
     states.put(ONE_ACTIVE_ANCHOR, this::oneActiveAnchor);
     states.put(ONE_ACTIVE_AND_ONE_PENDING_ANCHOR, this::oneActiveAndOnePendingAnchor);
+    states.put(LEAF_ISSUED, () -> leafState(REQUESTER));
+    states.put(LEAF_NAME_REFUSED, () -> leafState(REQUESTER));
+    states.put(NOT_A_LEAF_REQUESTER, () -> leafState(NOT_A_REQUESTER));
+  }
+
+  /** The caller of the state set up last. */
+  public Caller caller() {
+    return caller;
+  }
+
+  /** Unpins what the states pinned beyond the clock: the leaf randomness. */
+  public void reset() {
+    entropy.reset();
+    caller = OPERATOR_CALLER;
   }
 
   public Set<String> names() {
@@ -59,7 +108,9 @@ public class ProviderStates {
       throw new IllegalArgumentException(
           "No provider state '" + state + "' — this provider answers for " + states.keySet());
     }
-    return setup.get();
+    Setup done = setup.get();
+    caller = done.caller();
+    return done;
   }
 
   public Map<String, String> params(String state) {
@@ -77,7 +128,8 @@ public class ProviderStates {
     ca.stage(Ca.ACTIVE);
     Map<String, String> params = new TreeMap<>();
     params.put("activeAnchorId", Ca.ACTIVE);
-    return new Setup(Collections.unmodifiableMap(params));
+    entropy.reset();
+    return new Setup(Collections.unmodifiableMap(params), OPERATOR_CALLER);
   }
 
   private Setup oneActiveAndOnePendingAnchor() {
@@ -85,6 +137,16 @@ public class ProviderStates {
     Map<String, String> params = new TreeMap<>();
     params.put("activeAnchorId", Ca.ACTIVE);
     params.put("pendingAnchorId", Ca.PENDING);
-    return new Setup(Collections.unmodifiableMap(params));
+    entropy.reset();
+    return new Setup(Collections.unmodifiableMap(params), OPERATOR_CALLER);
+  }
+
+  /** The ACTIVE fixture anchor, the clock and the leaf randomness pinned, {@code subject} calling. */
+  private Setup leafState(String subject) {
+    ca.stage(Ca.ACTIVE);
+    entropy.pin();
+    Map<String, String> params = new TreeMap<>();
+    params.put("activeAnchorId", Ca.ACTIVE);
+    return new Setup(Collections.unmodifiableMap(params), new Caller(subject, List.of(Roles.SYSTEM)));
   }
 }

@@ -235,6 +235,19 @@ public class Anchors {
     }
   }
 
+  /** The ACTIVE anchor and its private key, read together from one snapshot. */
+  public record Signer(Anchor anchor, PrivateKey key) {}
+
+  /**
+   * The ACTIVE anchor with its private key, read from the volume on every call; empty when no
+   * anchor is ACTIVE.
+   *
+   * @throws AnchorStoreException when the key cannot be read or is not the certificate's
+   */
+  public Optional<Signer> signer() {
+    return first(anchors, AnchorStatus.ACTIVE).map(active -> new Signer(active, store.readKey(active)));
+  }
+
   /** The ACTIVE anchor's private key, for signing; read from the volume on every call. */
   public PrivateKey activeKey() {
     Anchor active =

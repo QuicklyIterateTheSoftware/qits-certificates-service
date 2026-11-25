@@ -70,6 +70,8 @@ before it signs anything.
 | `qits.certificates.anchor.overlap` | `P30D` |
 | `qits.certificates.anchor.renew-before` | `P365D` |
 | `qits.certificates.leaf.validity` | `P7D` |
+| `qits.certificates.leaf.requesters` | `${QITS_ENVIRONMENT:dev}-qits-egress` (comma separated `sub`s) |
+| `qits.certificates.domain` | `${QITS_DOMAIN:}` (blank refuses no platform host, logged once at WARN) |
 
 ## Crypto
 
@@ -84,7 +86,8 @@ running process, and the readiness check `certificates-anchors` is DOWN until ex
 anchor is loaded and its key reads back, so:
 
 - `CertificatesBootstrapIT` asserts it against the packaged artifact (the binary under
-  `./mvnw verify -Dnative`) and parses the bundle the door serves;
+  `./mvnw verify -Dnative`) and parses the bundle the door serves, and `LeafIssuanceIT` has the same
+  process sign a CSR with the anchor's stored key end to end;
 - the deploy's health gate on `/certificates/q/health/ready` refuses a container without one.
 
 ## Doors
@@ -93,7 +96,7 @@ anchor is loaded and its key reads back, so:
 |---|---|---|
 | `GET /certificates/api/anchors` | `@PermitAll` | The PEM bundle (ACTIVE, then PENDING, then RETIRING) as `text/plain` (the default) or `application/x-pem-file`; with `Accept: application/json`, `{"version","anchors":[{"id","status","subject","serial","notBefore","notAfter","sha256","activatesAt","retiresAt"}]}`. `ETag: "<version>"`, the SHA-256 of the PEM bundle; `If-None-Match` answers 304. 503 while no anchor is loaded. |
 | `POST /certificates/api/anchors/rotate` | `qits:admin` | 201 with the new PENDING anchor (the JSON shape above), 409 `{"error","anchorId"}` while one is PENDING. |
-| `POST /certificates/api/leaves` | `qits:system`, plus the requester list | Not yet (qits-2524 C3). |
+| `POST /certificates/api/leaves` | `qits:system`, plus the requester list | Body `{"csr":"<PKCS#10 PEM>"}`: 201 `{"certificate","chain","serial","notAfter","anchorId"}` (the chain is the leaf, then the ACTIVE anchor). 400 `{"error":"name refused","name"}` for a refused name, 400 `{"error":"<reason>"}` for any other CSR fault, 403 `{"error":"not a leaf requester"}`, 503 while no anchor is ACTIVE. See "Leaves" below. |
 
 No answer, log line, health check or error body ever carries a `PRIVATE KEY` PEM block
 (`NoPrivateKeyTest` calls every door on every path and scans bodies, headers and the log).
@@ -104,13 +107,46 @@ Health is at `/certificates/q/health/{live,ready}`, and the API document at
     curl -s https://certificates.qits.<domain>/certificates/api/anchors \
       | openssl x509 -noout -subject -ext basicConstraints
 
+## Leaves
+
+`control/Leaves` signs, `control/LeafPolicy` decides:
+
+- **Requester.** The door needs `qits:system`, and then the token's `sub` must be in
+  `qits.certificates.leaf.requesters`. Anyone else gets 403 `{"error":"not a leaf requester"}`; a
+  caller without `qits:system` gets the same 403, mapped on this door only so it is audited too.
+- **CSR.** One PKCS#10 PEM (at most 16 KiB) whose signature verifies, over an EC P-256 key or an
+  RSA key of at least 2048 bits. Its subject is ignored. Anything else is 400 with the reason.
+- **Names.** The subjectAltName of the CSR's extensionRequest: only dNSName, 1 to 10 (duplicates
+  folded), lower-cased, each a valid hostname. Refused with 400 `{"error":"name refused","name"}`: a
+  wildcard, an IP address, `localhost` (and `*.localhost`), a single label, a name under
+  `.internal` or `.local`, and `qits.<QITS_DOMAIN>` or anything under it.
+- **The leaf.** Subject `CN=<first name>`; SAN the names; basicConstraints critical CA:false;
+  keyUsage critical digitalSignature (+ keyEncipherment for RSA); extendedKeyUsage serverAuth;
+  AuthorityKeyIdentifier the ACTIVE anchor's key id; a SubjectKeyIdentifier; `notBefore` now − 5
+  min; `notAfter` = min(now + `leaf.validity`, the anchor's `notAfter`); a 128-bit random serial;
+  `SHA384withECDSA` by the ACTIVE anchor's key, read from `key.pem` for each leaf.
+- **Audit.** One INFO line on the logger `eu.wohlben.qits.certificates.audit` per decision, a
+  value that does not apply being `-` and the reason last:
+
+      certificates decision=ISSUED requester=dev-qits-egress names=api.example.org,www.example.org serial=<hex> anchor=<id> notAfter=2026-12-02T12:00:00Z reason=-
+      certificates decision=REFUSED requester=dev-qits-ci names=- serial=- anchor=- notAfter=- reason=not a leaf requester
+
+  The reasons are `not a leaf requester`, `not qits:system`, `name refused: <name> is <rule>`, the
+  CSR's fault, `no anchor is ACTIVE`, `the ACTIVE anchor has expired`, `the ACTIVE anchor's key
+  cannot be read` and `signing failed`. Every caller-supplied value is made printable first; the
+  CSR itself is never logged.
+
 ## Contracts
 
 The provider golden masters under `golden-masters/` (published as
 `eu.wohlben.qits:qits-certificates-golden-masters`) are recorded by
-`contracts/GoldenMasterRecordingTest` in two states, `one ACTIVE anchor` and `one ACTIVE and one
-PENDING anchor`, both staged from the fixed fixture anchors in `service/src/test/resources/fixtures/`
-with the clock pinned, so they re-record byte for byte. `ConsumerPactVerificationTest` verifies the
+`contracts/GoldenMasterRecordingTest` in five states, all staged from the fixed fixture anchors in
+`service/src/test/resources/fixtures/` with the clock pinned, so they re-record byte for byte:
+`one ACTIVE anchor` and `one ACTIVE and one PENDING anchor` for the anchors doors, and `leaf
+issued`, `leaf name refused` and `not a leaf requester` for `issueLeaf`. The leaf states send a
+fixed fixture CSR (`fixtures/csr/`) as the requester or as a `qits:system` service that is not one,
+and pin the leaf's randomness (`support/TestEntropy`), so the issued leaf, serial and signature
+included, is the same bytes on every run. `ConsumerPactVerificationTest` verifies the
 consumers' pacts against the same states (none pinned yet: qits-2632's trust-anchors client is the
 first).
 

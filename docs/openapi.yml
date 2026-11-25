@@ -46,6 +46,31 @@ components:
       format: date-time
       examples:
       - 2022-03-10T16:15:50Z
+    LeafDto:
+      type: object
+      properties:
+        certificate:
+          type: string
+        chain:
+          type: string
+        serial:
+          type: string
+        notAfter:
+          $ref: "#/components/schemas/Instant"
+        anchorId:
+          type: string
+    LeafRequest:
+      type: object
+      properties:
+        csr:
+          type: string
+    NameRefused:
+      type: object
+      properties:
+        error:
+          type: string
+        name:
+          type: string
   securitySchemes:
     SecurityScheme:
       type: openIdConnect
@@ -111,6 +136,51 @@ paths:
       security:
       - SecurityScheme:
         - qits:admin
+  /certificates/api/leaves:
+    post:
+      summary: "Sign a leaf certificate for a CSR, with the ACTIVE anchor"
+      operationId: issueLeaf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeafRequest"
+        required: true
+      responses:
+        "201":
+          description: "The leaf, and the chain: the leaf then the ACTIVE anchor"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeafDto"
+        "400":
+          description: "The CSR breaks a rule ({\"error\":<reason>}), or a name does\
+            \ ({\"error\":\"name refused\",\"name\":…})"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: "#/components/schemas/ErrorBody"
+                - $ref: "#/components/schemas/NameRefused"
+        "403":
+          description: The caller is not a leaf requester
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "503":
+          description: No anchor is ACTIVE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "401":
+          description: Not Authorized
+      tags:
+      - Leaves Resource
+      security:
+      - SecurityScheme:
+        - qits:system
 info:
   title: qits-certificates API
   version: "0"
