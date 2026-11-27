@@ -76,6 +76,8 @@ public class CertificatesBootstrapIT {
       // The leaf requester the leaf story calls as, spelled out rather than left to the
       // QITS_ENVIRONMENT of whichever machine runs the suite.
       overrides.put("qits.certificates.leaf.requesters", LEAF_REQUESTER);
+      // The workload story's service client is dev-qits-edge: the environment its sub is read in.
+      overrides.put("qits.certificates.environment", "dev");
       try {
         overrides.put(
             "qits.certificates.ca-dir", Files.createTempDirectory("qits-certificates-ca").toString());

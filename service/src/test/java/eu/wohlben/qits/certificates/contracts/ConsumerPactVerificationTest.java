@@ -12,7 +12,6 @@ import au.com.dius.pact.provider.junitsupport.IgnoreNoPactsToVerify;
 import au.com.dius.pact.provider.junitsupport.Provider;
 import au.com.dius.pact.provider.junitsupport.State;
 import au.com.dius.pact.provider.junitsupport.loader.PactSource;
-import eu.wohlben.qits.certificates.support.ContractCallers;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -38,7 +37,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * <p>An interaction that carries no {@code Authorization} runs as its state's caller ({@link
  * ProviderStates.Setup#caller()}): the operator holding {@code qits:admin} in the anchors states
  * (the anchors read needs none; the rotation needs it), the leaf requester or a {@code qits:system}
- * service that is not one in the leaf states. Every {@code @State} method
+ * service that is not one in the leaf states, qits-edge's service token or a person's token in the
+ * workload states. Every {@code @State} method
  * delegates to {@link ProviderStates}; {@link #target} fails an unknown state, and an interaction
  * without {@code comments.references.qits-call} or {@code qits-trigger}.
  */
@@ -102,10 +102,7 @@ class ConsumerPactVerificationTest {
       return;
     }
     if (request != null && !request.containsHeader("Authorization")) {
-      ProviderStates.Caller caller = states.caller();
-      request.setHeader(
-          "Authorization",
-          ContractCallers.caller(caller.subject(), caller.roles().toArray(String[]::new)));
+      request.setHeader("Authorization", states.caller().authorization());
     }
     try {
       context.verifyInteraction();
@@ -139,5 +136,20 @@ class ConsumerPactVerificationTest {
   @State(ProviderStates.NOT_A_LEAF_REQUESTER)
   Map<String, String> notALeafRequester() {
     return states.params(ProviderStates.NOT_A_LEAF_REQUESTER);
+  }
+
+  @State(ProviderStates.WORKLOAD_CERTIFICATE_ISSUED)
+  Map<String, String> workloadCertificateIssued() {
+    return states.params(ProviderStates.WORKLOAD_CERTIFICATE_ISSUED);
+  }
+
+  @State(ProviderStates.WORKLOAD_CERTIFICATE_REFUSED)
+  Map<String, String> workloadCertificateRefused() {
+    return states.params(ProviderStates.WORKLOAD_CERTIFICATE_REFUSED);
+  }
+
+  @State(ProviderStates.WORKLOAD_CSR_REFUSED)
+  Map<String, String> workloadCsrRefused() {
+    return states.params(ProviderStates.WORKLOAD_CSR_REFUSED);
   }
 }

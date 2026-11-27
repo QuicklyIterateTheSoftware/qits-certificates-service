@@ -185,6 +185,88 @@
           }
         }
       ]
+    },
+    {
+      "name": "workload certificate issued",
+      "slug": "workload-certificate-issued",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueWorkloadCertificate",
+          "method": "POST",
+          "path": "/certificates/api/workload-certificates",
+          "body": {
+            "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIBFjCBvAIBADAcMRowGAYDVQQDDBFpZ25vcmVkIGJ5IHRoZSBDQTBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABLC3UU1slpd0ZdoRxiIUKlyVIf5MjydBKkWD163w\nj7LqjBZ6vbGakDIXgzY6CA5muraldyFCHEgeyo/jdVAgkeCgPjA8BgkqhkiG9w0B\nCQ4xLzAtMCsGA1UdEQQkMCKCD2FwaS5leGFtcGxlLm9yZ4IPd3d3LmV4YW1wbGUu\nb3JnMAoGCCqGSM49BAMCA0kAMEYCIQCdLS+Yw1X5Ls1yvtxQgYVZT+Lh30JaQdu5\n8nzuE2yHHwIhAOniWC+t15/NB1Yv64detyoG8H0YT9/uAMns8jhOakkm\n-----END CERTIFICATE REQUEST-----\n"
+          },
+          "status": 201,
+          "file": "workload-certificate-issued/issueWorkloadCertificate.json",
+          "frozen": {
+            "ids": [
+              "$.anchorId"
+            ],
+            "instants": [
+              "$.notAfter"
+            ],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "workload certificate refused",
+      "slug": "workload-certificate-refused",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueWorkloadCertificate",
+          "method": "POST",
+          "path": "/certificates/api/workload-certificates",
+          "body": {
+            "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIBFjCBvAIBADAcMRowGAYDVQQDDBFpZ25vcmVkIGJ5IHRoZSBDQTBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABLC3UU1slpd0ZdoRxiIUKlyVIf5MjydBKkWD163w\nj7LqjBZ6vbGakDIXgzY6CA5muraldyFCHEgeyo/jdVAgkeCgPjA8BgkqhkiG9w0B\nCQ4xLzAtMCsGA1UdEQQkMCKCD2FwaS5leGFtcGxlLm9yZ4IPd3d3LmV4YW1wbGUu\nb3JnMAoGCCqGSM49BAMCA0kAMEYCIQCdLS+Yw1X5Ls1yvtxQgYVZT+Lh30JaQdu5\n8nzuE2yHHwIhAOniWC+t15/NB1Yv64detyoG8H0YT9/uAMns8jhOakkm\n-----END CERTIFICATE REQUEST-----\n"
+          },
+          "status": 403,
+          "file": "workload-certificate-refused/issueWorkloadCertificate.json",
+          "frozen": {
+            "ids": [],
+            "instants": [],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "workload csr refused",
+      "slug": "workload-csr-refused",
+      "params": {
+        "activeAnchorId": "00000000-0000-4000-8000-000000000001"
+      },
+      "dependsOn": [],
+      "operations": [
+        {
+          "operationId": "issueWorkloadCertificate",
+          "method": "POST",
+          "path": "/certificates/api/workload-certificates",
+          "body": {
+            "csr": "not a csr"
+          },
+          "status": 400,
+          "file": "workload-csr-refused/issueWorkloadCertificate.json",
+          "frozen": {
+            "ids": [],
+            "instants": [],
+            "strings": [],
+            "listFilteredTo": null
+          }
+        }
+      ]
     }
   ]
 }

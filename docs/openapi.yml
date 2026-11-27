@@ -71,6 +71,26 @@ components:
           type: string
         name:
           type: string
+    WorkloadCertificateDto:
+      type: object
+      properties:
+        certificate:
+          type: string
+        chain:
+          type: string
+        serial:
+          type: string
+        notAfter:
+          $ref: "#/components/schemas/Instant"
+        anchorId:
+          type: string
+        principal:
+          type: string
+    WorkloadCertificateRequest:
+      type: object
+      properties:
+        csr:
+          type: string
   securitySchemes:
     SecurityScheme:
       type: openIdConnect
@@ -181,6 +201,55 @@ paths:
       security:
       - SecurityScheme:
         - qits:system
+  /certificates/api/workload-certificates:
+    post:
+      summary: "Sign a client certificate for the caller's own principal, for a CSR's\
+        \ key"
+      operationId: issueWorkloadCertificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkloadCertificateRequest"
+        required: true
+      responses:
+        "201":
+          description: "The certificate, and the chain: the certificate then the ACTIVE\
+            \ anchor"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkloadCertificateDto"
+        "400":
+          description: "The CSR does not parse, does not verify, or has a key this\
+            \ CA does not take"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "401":
+          description: No bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "403":
+          description: The caller's token may not have a workload certificate; error
+            names why
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "503":
+          description: No anchor is ACTIVE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+      tags:
+      - Workload Certificates Resource
+      security:
+      - SecurityScheme: []
 info:
   title: qits-certificates API
   version: "0"

@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import eu.wohlben.qits.certificates.support.ContractCallers;
 import eu.wohlben.qits.certificates.support.Csrs;
 import eu.wohlben.qits.certificates.support.TestClock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -153,6 +152,38 @@ class GoldenMasterRecordingTest {
               403,
               true,
               List.of(),
+              List.of()),
+          // The fixture CSR asks for api.example.org and www.example.org; the certificate names
+          // only qits-edge, from its token (qits-2756).
+          new Interaction(
+              ProviderStates.WORKLOAD_CERTIFICATE_ISSUED,
+              "issueWorkloadCertificate",
+              "POST",
+              API + "/workload-certificates",
+              Csrs.body(Csrs.fixture(Csrs.TWO_NAMES)),
+              201,
+              true,
+              List.of(),
+              List.of()),
+          new Interaction(
+              ProviderStates.WORKLOAD_CERTIFICATE_REFUSED,
+              "issueWorkloadCertificate",
+              "POST",
+              API + "/workload-certificates",
+              Csrs.body(Csrs.fixture(Csrs.TWO_NAMES)),
+              403,
+              true,
+              List.of(),
+              List.of()),
+          new Interaction(
+              ProviderStates.WORKLOAD_CSR_REFUSED,
+              "issueWorkloadCertificate",
+              "POST",
+              API + "/workload-certificates",
+              "{\"csr\":\"not a csr\"}",
+              400,
+              true,
+              List.of(),
               List.of()));
 
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -265,11 +296,7 @@ class GoldenMasterRecordingTest {
     Map<String, String> params = setup.params();
     var request = given().header("Accept", "application/json");
     if (interaction.authorized()) {
-      ProviderStates.Caller caller = setup.caller();
-      request =
-          request.header(
-              "Authorization",
-              ContractCallers.caller(caller.subject(), caller.roles().toArray(String[]::new)));
+      request = request.header("Authorization", setup.caller().authorization());
     }
     if (interaction.requestBody() != null) {
       request = request.contentType("application/json").body(interaction.requestBody());

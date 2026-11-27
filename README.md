@@ -71,6 +71,7 @@ before it signs anything.
 | `qits.certificates.anchor.renew-before` | `P365D` |
 | `qits.certificates.leaf.validity` | `P7D` |
 | `qits.certificates.leaf.requesters` | `${QITS_ENVIRONMENT:dev}-qits-egress` (comma separated `sub`s) |
+| `qits.certificates.workload.validity` | `P1D` (startup fails above `leaf.validity`) |
 | `qits.certificates.domain` | `${QITS_DOMAIN:}` (blank refuses no platform host, logged once at WARN) |
 
 ## Crypto
@@ -87,7 +88,8 @@ anchor is loaded and its key reads back, so:
 
 - `CertificatesBootstrapIT` asserts it against the packaged artifact (the binary under
   `./mvnw verify -Dnative`) and parses the bundle the door serves, and `LeafIssuanceIT` has the same
-  process sign a CSR with the anchor's stored key end to end;
+  process sign a CSR with the anchor's stored key end to end, as `WorkloadCertificateIT` does for a
+  workload certificate;
 - the deploy's health gate on `/certificates/q/health/ready` refuses a container without one.
 
 ## Doors
@@ -97,6 +99,7 @@ anchor is loaded and its key reads back, so:
 | `GET /certificates/api/anchors` | `@PermitAll` | The PEM bundle (ACTIVE, then PENDING, then RETIRING) as `text/plain` (the default) or `application/x-pem-file`; with `Accept: application/json`, `{"version","anchors":[{"id","status","subject","serial","notBefore","notAfter","sha256","activatesAt","retiresAt"}]}`. `ETag: "<version>"`, the SHA-256 of the PEM bundle; `If-None-Match` answers 304. 503 while no anchor is loaded. |
 | `POST /certificates/api/anchors/rotate` | `qits:admin` | 201 with the new PENDING anchor (the JSON shape above), 409 `{"error","anchorId"}` while one is PENDING. |
 | `POST /certificates/api/leaves` | `qits:system`, plus the requester list | Body `{"csr":"<PKCS#10 PEM>"}`: 201 `{"certificate","chain","serial","notAfter","anchorId"}` (the chain is the leaf, then the ACTIVE anchor). 400 `{"error":"name refused","name"}` for a refused name, 400 `{"error":"<reason>"}` for any other CSR fault, 403 `{"error":"not a leaf requester"}`, 503 while no anchor is ACTIVE. See "Leaves" below. |
+| `POST /certificates/api/workload-certificates` | `@Authenticated` (any platform bearer) | Body `{"csr":"<PKCS#10 PEM>"}`: 201 `{"certificate","chain","serial","notAfter","anchorId","principal"}`, a client certificate for the caller's own principal. 400 `{"error":"<reason>"}` for a CSR fault, 401 without a bearer, 403 `{"error":"<reason>"}` for a token that may not have one, 503 while no anchor is ACTIVE. See "Workload certificates" below. |
 
 No answer, log line, health check or error body ever carries a `PRIVATE KEY` PEM block
 (`NoPrivateKeyTest` calls every door on every path and scans bodies, headers and the log).
@@ -136,14 +139,46 @@ Health is at `/certificates/q/health/{live,ready}`, and the API document at
   cannot be read` and `signing failed`. Every caller-supplied value is made printable first; the
   CSR itself is never logged.
 
+## Workload certificates
+
+Epic qits-2626, qits-2756. `api/WorkloadCertificatesResource` decides who, `control/WorkloadCertificates`
+signs, `control/WorkloadCrypto` builds the certificate. The key is made in the workload and only its
+CSR is sent.
+
+- **Who.** The principal comes from the validated bearer alone, through qits-auth-core's
+  `WorkloadPrincipal` (the grammar qits-egress keys its grants with): `application:<app>` for a
+  service client `<env>-<app>` holding `qits:system` and `clients/<sub>`, else `agent:<agent>` (with
+  its `project`), else `project:<project>`. Opaque `qits_tok_` callers arrive as the JWT the edge
+  introspected them into. The CSR's subject and subjectAltNames are never read.
+- **Refused with 403**, reason as the error: `an exchanged token` (`act`), `a person's token`
+  (`credential_type`), `no workload principal` (it maps to `subject:`, or the identity is not a
+  JWT), `a name unfit for a certificate` (a foreign environment's service client, whose `project`
+  is `*`, for one).
+- **CSR.** Checked like a leaf's (PKCS#10, at most 16 KiB, signature verifies, EC P-256 or RSA of
+  at least 2048 bits); 400 with the reason otherwise.
+- **The certificate.** Subject `CN=<kind>:<name>` (informational, cut at 64, never read); URI SAN
+  `urn:qits:principal:<kind>:<name>`, plus `urn:qits:project:<id>` for an agent; an application also
+  gets DNS SAN `<QITS_ENVIRONMENT>-<app>`, its wire alias. basicConstraints critical CA:false;
+  keyUsage critical digitalSignature (+ keyEncipherment for RSA); EKU clientAuth, + serverAuth for an
+  application. `notBefore` now − 5 min, `notAfter` = min(now + `workload.validity`, the anchor's
+  `notAfter`). No revocation: deleting a token or rotating a client stops its renewals, so a
+  principal's tail is at most one validity.
+- **Audit.** The leaves' line with `kind=workload principal=<p>`, for every issue and refusal (the
+  401 included); `names` are the URIs and DNS names the certificate carries, never the CSR's:
+
+      certificates decision=ISSUED kind=workload requester=dev-qits-edge principal=application:qits-edge names=urn:qits:principal:application:qits-edge,dev-qits-edge serial=<hex> anchor=<id> notAfter=2026-11-26T12:00:00Z reason=-
+      certificates decision=REFUSED kind=workload requester=<sub> principal=subject:<sub> names=- serial=- anchor=- notAfter=- reason=a person's token
+
 ## Contracts
 
 The provider golden masters under `golden-masters/` (published as
 `eu.wohlben.qits:qits-certificates-golden-masters`) are recorded by
-`contracts/GoldenMasterRecordingTest` in five states, all staged from the fixed fixture anchors in
+`contracts/GoldenMasterRecordingTest` in eight states, all staged from the fixed fixture anchors in
 `service/src/test/resources/fixtures/` with the clock pinned, so they re-record byte for byte:
 `one ACTIVE anchor` and `one ACTIVE and one PENDING anchor` for the anchors doors, and `leaf
-issued`, `leaf name refused` and `not a leaf requester` for `issueLeaf`. The leaf states send a
+issued`, `leaf name refused` and `not a leaf requester` for `issueLeaf`, and `workload certificate issued`
+(qits-edge's service token), `workload certificate refused` (a person's token) and `workload csr
+refused` for `issueWorkloadCertificate`. The leaf and workload states send a
 fixed fixture CSR (`fixtures/csr/`) as the requester or as a `qits:system` service that is not one,
 and pin the leaf's randomness (`support/TestEntropy`), so the issued leaf, serial and signature
 included, is the same bytes on every run. `ConsumerPactVerificationTest` verifies the

@@ -8,7 +8,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * native binary that is a 500 behind a green JVM suite.
  *
  * <p><b>A new served type joins this list in the commit that adds it</b>; ApiWireReflectionTest
- * fails naming any nested type of {@link AnchorsWire} or {@link LeavesWire} left out.
+ * fails naming any nested type of {@link AnchorsWire}, {@link LeavesWire} or {@link WorkloadsWire} left out.
  */
 @RegisterForReflection(
     targets = {
@@ -17,7 +17,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
       AnchorsWire.ErrorBody.class,
       LeavesWire.LeafRequest.class,
       LeavesWire.LeafDto.class,
-      LeavesWire.NameRefused.class
+      LeavesWire.NameRefused.class,
+      WorkloadsWire.WorkloadCertificateRequest.class,
+      WorkloadsWire.WorkloadCertificateDto.class
     })
 public final class ApiWireReflection {
 

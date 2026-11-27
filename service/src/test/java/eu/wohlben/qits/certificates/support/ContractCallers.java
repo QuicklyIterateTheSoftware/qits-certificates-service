@@ -11,10 +11,13 @@ import io.quarkus.vertx.http.runtime.security.HttpAuthenticationMechanism;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
  * <b>The callers a suite names by their {@code Authorization} value</b> (qits-agents-service's
@@ -22,13 +25,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * until it is granted here. {@link #caller} grants a named caller holding roles; its scheme is
  * {@code Suite}, never {@code Bearer}. Tried before the shipped mechanisms; a request whose value
  * nobody granted is left alone, and is anonymous with the OIDC tenant off.
+ *
+ * <p>{@link #token} grants a caller whose principal is a {@link JsonWebToken} carrying the given
+ * claims, as quarkus-oidc leaves it: the workload door (qits-2756) decides from claims, not roles.
  */
 @ApplicationScoped
 public class ContractCallers implements HttpAuthenticationMechanism {
 
   static final String SCHEME = "Suite ";
 
-  record Grant(String subject, Set<String> roles) {}
+  record Grant(String subject, Set<String> roles, Map<String, Object> claims) {}
+
+  private static final AtomicLong TOKENS = new AtomicLong();
 
   private final Map<String, Grant> grants = new ConcurrentHashMap<>();
 
@@ -36,7 +44,24 @@ public class ContractCallers implements HttpAuthenticationMechanism {
   public static String caller(String subject, String... roles) {
     String authorization = SCHEME + subject + "." + String.join("+", roles);
     // Through a method: the bean is a client proxy, whose own fields are not the instance's.
-    Arc.container().instance(ContractCallers.class).get().grant(authorization, new Grant(subject, Set.of(roles)));
+    Arc.container()
+        .instance(ContractCallers.class)
+        .get()
+        .grant(authorization, new Grant(subject, Set.of(roles), null));
+    return authorization;
+  }
+
+  /**
+   * The {@code Authorization} value of a token carrying {@code claims} (its {@code sub} among them)
+   * and holding {@code roles}. Each call grants a value of its own.
+   */
+  public static String token(Map<String, Object> claims, String... roles) {
+    String subject = String.valueOf(claims.get("sub"));
+    String authorization = SCHEME + "jwt-" + TOKENS.incrementAndGet() + "." + subject;
+    Arc.container()
+        .instance(ContractCallers.class)
+        .get()
+        .grant(authorization, new Grant(subject, Set.of(roles), new LinkedHashMap<>(claims)));
     return authorization;
   }
 
@@ -53,7 +78,11 @@ public class ContractCallers implements HttpAuthenticationMechanism {
       return Uni.createFrom().optional(Optional.empty());
     }
     QuarkusSecurityIdentity.Builder identity =
-        QuarkusSecurityIdentity.builder().setPrincipal(new QuarkusPrincipal(grant.subject()));
+        QuarkusSecurityIdentity.builder()
+            .setPrincipal(
+                grant.claims() == null
+                    ? new QuarkusPrincipal(grant.subject())
+                    : new SuiteJwt(grant.subject(), grant.claims()));
     grant.roles().forEach(identity::addRole);
     return Uni.createFrom().item(identity.build());
   }
@@ -71,5 +100,25 @@ public class ContractCallers implements HttpAuthenticationMechanism {
   @Override
   public int getPriority() {
     return DEFAULT_PRIORITY + 1000;
+  }
+
+  /** A validated token's principal, as far as a door reads one: its name and its claims. */
+  record SuiteJwt(String name, Map<String, Object> claims) implements JsonWebToken {
+
+    @Override
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public Set<String> getClaimNames() {
+      return claims.keySet();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getClaim(String claimName) {
+      return (T) claims.get(claimName);
+    }
   }
 }

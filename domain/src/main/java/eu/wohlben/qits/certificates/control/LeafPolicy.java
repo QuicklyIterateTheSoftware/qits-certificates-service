@@ -118,16 +118,9 @@ public final class LeafPolicy {
    * @throws LeafRefused {@link LeafRefused.Kind#CSR} or {@link LeafRefused.Kind#NAME}
    */
   public Request check(String pem) {
-    if (pem == null || pem.isBlank()) {
-      throw LeafRefused.csr("the request carries no csr");
-    }
-    if (pem.length() > MAX_CSR) {
-      throw LeafRefused.csr("the csr is longer than " + MAX_CSR + " characters");
-    }
-    PKCS10CertificationRequest csr = parse(pem);
+    PKCS10CertificationRequest csr = verified(pem);
     SubjectPublicKeyInfo key = csr.getSubjectPublicKeyInfo();
-    boolean rsa = checkKey(key);
-    verify(csr, key);
+    boolean rsa = PKCSObjectIdentifiers.rsaEncryption.equals(key.getAlgorithm().getAlgorithm());
     List<String> names = names(csr);
     for (String name : names) {
       String why = refusal(name);
@@ -136,6 +129,38 @@ public final class LeafPolicy {
       }
     }
     return new Request(key, rsa, names);
+  }
+
+  /** A CSR's key, once the CSR parsed, its key passed and its signature verified. */
+  public record CsrKey(SubjectPublicKeyInfo key, boolean rsa) {}
+
+  /**
+   * Reads a CSR for its key alone: one PKCS#10 PEM of at most {@value #MAX_CSR} characters, over an
+   * EC P-256 key or an RSA key of 2048 bits or more, whose signature verifies. Its subject and its
+   * extensionRequest are not read. The workload door's check (qits-2756), and the first half of
+   * {@link #check}.
+   *
+   * @throws LeafRefused {@link LeafRefused.Kind#CSR}
+   */
+  public static CsrKey key(String pem) {
+    PKCS10CertificationRequest csr = verified(pem);
+    SubjectPublicKeyInfo key = csr.getSubjectPublicKeyInfo();
+    return new CsrKey(
+        key, PKCSObjectIdentifiers.rsaEncryption.equals(key.getAlgorithm().getAlgorithm()));
+  }
+
+  private static PKCS10CertificationRequest verified(String pem) {
+    if (pem == null || pem.isBlank()) {
+      throw LeafRefused.csr("the request carries no csr");
+    }
+    if (pem.length() > MAX_CSR) {
+      throw LeafRefused.csr("the csr is longer than " + MAX_CSR + " characters");
+    }
+    PKCS10CertificationRequest csr = parse(pem);
+    SubjectPublicKeyInfo key = csr.getSubjectPublicKeyInfo();
+    checkKey(key);
+    verify(csr, key);
+    return csr;
   }
 
   private static PKCS10CertificationRequest parse(String pem) {

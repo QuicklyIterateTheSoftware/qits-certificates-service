@@ -19,7 +19,9 @@ them; never move them by hand.
   Flyway. `Anchors` is the state machine and the published bundle, `AnchorStore` the volume
   (`<ca-dir>/anchors/<id>/`), `AnchorCrypto` the keys and certificates. `Leaves` signs leaves and
   writes the audit line, `LeafPolicy` holds every rule of who may ask and for which names, and
-  `LeafCrypto` builds the leaf. Its tests are plain JUnit on a temp directory with a clock they
+  `LeafCrypto` builds the leaf. `WorkloadCertificates` and `WorkloadCrypto` sign workload client
+  certificates for a `WorkloadRequest` the door decided from the bearer (qits-2756); they reuse
+  `LeafPolicy.key` for the CSR and never read its names. Its tests are plain JUnit on a temp directory with a clock they
   move (`AnchorsTest`, `LeavesTest`, `LeafPolicyTest`).
 - `service/`: the deployable. `api` (the doors, `Roles`, `AnchorsWire`, `LeavesWire`,
   `ApiWireReflection`), `health/AnchorsReadiness`, and `rotation` (the startup run and the daily
@@ -40,7 +42,10 @@ them; never move them by hand.
 - **Roles** are spelled out in each `@RolesAllowed`. Wherever `qits:admin-agent` is admitted,
   `qits:desk-admin` is admitted too (`DeskAdminParityTest`).
 - **Every served type** is listed in `api/ApiWireReflection`; `ApiWireReflectionTest` fails on a
-  nested type of `AnchorsWire` or `LeavesWire` left out.
+  nested type of `AnchorsWire`, `LeavesWire` or `WorkloadsWire` left out.
+- **A door that decides from claims** (the workload door) is tested with
+  `support/ContractCallers.token(claims, roles)`, whose principal is a `JsonWebToken` as quarkus-oidc
+  leaves it; `caller(sub, roles)` is a bare principal with roles.
 - **Every leaf decision is audited**, one INFO line on `eu.wohlben.qits.certificates.audit`
   (README, "Leaves"). A new refusal path writes its line through `Leaves`; a door-level refusal
   (the 403 for a caller without `qits:system`) is mapped on `LeavesResource` for that reason.
@@ -80,7 +85,9 @@ runs them.
 volume (a temp directory), makes its first anchor with bcpkix inside the binary under
 `./mvnw verify -Dnative`, reports `certificates-anchors` UP, and serves the bundle the story parses.
 `stories/leaves/LeafIssuanceIT`, on the same profile, has that process sign a CSR with the
-anchor's stored key end to end and refuse a non-requester and an agent.
+anchor's stored key end to end and refuse a non-requester and an agent. `stories/workloads/WorkloadCertificateIT`
+has it validate a real token, map it through `WorkloadPrincipal` and sign a workload certificate
+(qits-2756), and refuse a person's and an exchanged token.
 
 The release recipe does not run it natively, because the image build is `package -DskipTests`. In
 production the same check is the deploy's health gate, so a native image that has lost part of Bouncy

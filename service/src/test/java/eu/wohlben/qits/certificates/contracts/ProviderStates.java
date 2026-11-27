@@ -2,6 +2,7 @@ package eu.wohlben.qits.certificates.contracts;
 
 import eu.wohlben.qits.certificates.api.Roles;
 import eu.wohlben.qits.certificates.support.Ca;
+import eu.wohlben.qits.certificates.support.ContractCallers;
 import eu.wohlben.qits.certificates.support.TestEntropy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -46,6 +47,35 @@ public class ProviderStates {
   /** A {@code qits:system} service that is not a leaf requester asks for a leaf. */
   public static final String NOT_A_LEAF_REQUESTER = "not a leaf requester";
 
+  /** qits-edge's own service client asks for its workload certificate (qits-2756). */
+  public static final String WORKLOAD_CERTIFICATE_ISSUED = "workload certificate issued";
+
+  /** A person's token asks for a workload certificate, which only workloads get. */
+  public static final String WORKLOAD_CERTIFICATE_REFUSED = "workload certificate refused";
+
+  /** A workload sends something that is not a CSR. */
+  public static final String WORKLOAD_CSR_REFUSED = "workload csr refused";
+
+  /** The service client the workload states call as: qits-edge in the suite's environment. */
+  public static final Caller WORKLOAD_SERVICE =
+      new Caller(
+          "dev-qits-edge",
+          List.of(Roles.SYSTEM),
+          Map.of(
+              "sub", "dev-qits-edge",
+              "groups", List.of("qits:system", "clients/dev-qits-edge"),
+              "project", "*"));
+
+  /** A person signed in with the CLI. */
+  public static final Caller PERSON =
+      new Caller(
+          "6b0c1f4e-0000-4000-8000-00000000000a",
+          List.of(Roles.ADMIN),
+          Map.of(
+              "sub", "6b0c1f4e-0000-4000-8000-00000000000a",
+              "groups", List.of(Roles.ADMIN),
+              "credential_type", "cli"));
+
   /** Who the operator recordings call as. */
   public static final String OPERATOR = "operator";
 
@@ -55,8 +85,24 @@ public class ProviderStates {
   /** A {@code qits:system} service that is not a leaf requester. */
   public static final String NOT_A_REQUESTER = "dev-qits-ci";
 
-  /** Who calls: a {@code sub} and the roles it holds. */
-  public record Caller(String subject, List<String> roles) {}
+  /**
+   * Who calls: a {@code sub}, the roles it holds and, for a door that reads them, its token's
+   * claims (null: a principal with no claims, as every leaf and anchors state has).
+   */
+  public record Caller(String subject, List<String> roles, Map<String, Object> claims) {
+
+    public Caller(String subject, List<String> roles) {
+      this(subject, roles, null);
+    }
+
+    /** The {@code Authorization} value this caller sends ({@link ContractCallers}). */
+    public String authorization() {
+      String[] held = roles.toArray(String[]::new);
+      return claims == null
+          ? ContractCallers.caller(subject, held)
+          : ContractCallers.token(claims, held);
+    }
+  }
 
   /** The operator holding {@code qits:admin}, the caller of every anchors state. */
   public static final Caller OPERATOR_CALLER = new Caller(OPERATOR, List.of(Roles.ADMIN));
@@ -85,6 +131,9 @@ public class ProviderStates {
     states.put(LEAF_ISSUED, () -> leafState(REQUESTER));
     states.put(LEAF_NAME_REFUSED, () -> leafState(REQUESTER));
     states.put(NOT_A_LEAF_REQUESTER, () -> leafState(NOT_A_REQUESTER));
+    states.put(WORKLOAD_CERTIFICATE_ISSUED, () -> pinnedAnchor(WORKLOAD_SERVICE));
+    states.put(WORKLOAD_CERTIFICATE_REFUSED, () -> pinnedAnchor(PERSON));
+    states.put(WORKLOAD_CSR_REFUSED, () -> pinnedAnchor(WORKLOAD_SERVICE));
   }
 
   /** The caller of the state set up last. */
@@ -143,10 +192,15 @@ public class ProviderStates {
 
   /** The ACTIVE fixture anchor, the clock and the leaf randomness pinned, {@code subject} calling. */
   private Setup leafState(String subject) {
+    return pinnedAnchor(new Caller(subject, List.of(Roles.SYSTEM)));
+  }
+
+  /** The ACTIVE fixture anchor, the clock and the randomness pinned, {@code caller} calling. */
+  private Setup pinnedAnchor(Caller caller) {
     ca.stage(Ca.ACTIVE);
     entropy.pin();
     Map<String, String> params = new TreeMap<>();
     params.put("activeAnchorId", Ca.ACTIVE);
-    return new Setup(Collections.unmodifiableMap(params), new Caller(subject, List.of(Roles.SYSTEM)));
+    return new Setup(Collections.unmodifiableMap(params), caller);
   }
 }

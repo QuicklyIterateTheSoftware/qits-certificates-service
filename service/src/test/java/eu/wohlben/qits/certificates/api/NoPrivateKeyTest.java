@@ -166,6 +166,23 @@ class NoPrivateKeyTest {
     scan("POST leaves with a key for a CSR", () -> leaf(requester, keyAsCsr), 400);
     scan("POST leaves with no csr", () -> leaf(requester, "{}"), 400);
     scan("GET leaves", () -> given().get(LEAVES), 405);
+
+    // The workload door (qits-2756): issued, and every refusal.
+    String edge =
+        ContractCallers.token(
+            java.util.Map.of(
+                "sub", "dev-qits-edge",
+                "groups", java.util.List.of(Roles.SYSTEM, "clients/dev-qits-edge")),
+            Roles.SYSTEM);
+    String person =
+        ContractCallers.token(
+            java.util.Map.of("sub", "p", "credential_type", "cli"), Roles.ADMIN);
+    scan("POST workload anonymous", () -> workload(null, csr), 401);
+    scan("POST workload as a person", () -> workload(person, csr), 403);
+    scan("POST workload", () -> workload(edge, csr), 201);
+    scan("POST workload with a P-384 key", () -> workload(edge, p384), 400);
+    scan("POST workload with a key for a CSR", () -> workload(edge, keyAsCsr), 400);
+    scan("POST workload with no csr", () -> workload(edge, "{}"), 400);
     scan("GET unknown", () -> given().get("/certificates/api/nothing"), 404);
     scan("GET ready", () -> given().get("/certificates/q/health/ready"), 200);
     scan("GET live", () -> given().get("/certificates/q/health/live"), 200);
@@ -210,7 +227,7 @@ class NoPrivateKeyTest {
     assertTrue(
         lines.stream().anyMatch(l -> l.contains("certificates decision=ISSUED")),
         "the issuance was audited: " + lines);
-    assertEquals(31, calls.size(), "every door and every path: " + calls);
+    assertEquals(37, calls.size(), "every door and every path: " + calls);
   }
 
   private static Response leaf(String authorization, String body) {
@@ -219,5 +236,13 @@ class NoPrivateKeyTest {
       request = request.header("Authorization", authorization);
     }
     return request.post(LEAVES);
+  }
+
+  private static Response workload(String authorization, String body) {
+    var request = given().contentType("application/json").body(body);
+    if (authorization != null) {
+      request = request.header("Authorization", authorization);
+    }
+    return request.post("/certificates/api/workload-certificates");
   }
 }

@@ -91,7 +91,7 @@ final class LeafCrypto {
   }
 
   /** The anchor's own SubjectKeyIdentifier as a key id; computed from its key when it has none. */
-  private static AuthorityKeyIdentifier authorityKeyId(X509Certificate issuer, JcaX509ExtensionUtils utils)
+  static AuthorityKeyIdentifier authorityKeyId(X509Certificate issuer, JcaX509ExtensionUtils utils)
       throws GeneralSecurityException {
     byte[] ski = issuer.getExtensionValue(Extension.subjectKeyIdentifier.getId());
     if (ski == null) {
