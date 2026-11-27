@@ -23,7 +23,7 @@
          qits-agents-service pins. Exact versions, never ranges: qits-maintenance bumps each one. -->
     <groupId>eu.wohlben.qits</groupId>
     <artifactId>qits-certificates</artifactId>
-    <version>2026.1127.164242</version>
+    <version>2026.1127.172534</version>
     <packaging>pom</packaging>
     <name>qits-certificates</name>
 
